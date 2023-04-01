@@ -1,3 +1,5 @@
+import 'package:chat_tutorial/API_Services/api_services.dart';
+import 'package:chat_tutorial/widgets/dropdown.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/src/widgets/framework.dart';
 import 'package:flutter/src/widgets/placeholder.dart';
@@ -47,7 +49,32 @@ class _ChatScreenState extends State<ChatScreen> {
         title: const Text("ChatGPT"),
         actions: [
           IconButton(
-              onPressed: () async {},
+              onPressed: () async {
+                showModalBottomSheet(
+                    shape: const RoundedRectangleBorder(
+                        borderRadius:
+                            BorderRadius.vertical(top: Radius.circular(20))),
+                    backgroundColor: Color.fromRGBO(9, 9, 9, 1),
+                    context: context,
+                    builder: (context) {
+                      return Padding(
+                        padding: const EdgeInsets.all(18.0),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                "Models",
+                                style: TextStyle(
+                                    fontSize: 16, color: Colors.white),
+                              ),
+                            ),
+                            Flexible(flex: 2, child: ModelsDropDown())
+                          ],
+                        ),
+                      );
+                    });
+              },
               icon: const Icon(
                 Icons.more_vert_rounded,
                 color: Colors.white,
@@ -104,7 +131,13 @@ class _ChatScreenState extends State<ChatScreen> {
                         hintStyle: TextStyle(color: Colors.grey)),
                   )),
                   IconButton(
-                      onPressed: () async {},
+                      onPressed: () async {
+                        try {
+                          await ApiServices.getModels();
+                        } catch (e) {
+                          print(e);
+                        }
+                      },
                       icon: const Icon(
                         Icons.send,
                         color: Colors.black,
