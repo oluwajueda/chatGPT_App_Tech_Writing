@@ -1,8 +1,13 @@
 import 'package:chat_tutorial/API_Services/api_services.dart';
+import 'package:chat_tutorial/models/chatModel.dart';
 import 'package:chat_tutorial/widgets/dropdown.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/src/widgets/framework.dart';
 import 'package:flutter/src/widgets/placeholder.dart';
+import 'package:provider/provider.dart';
+import 'package:animated_text_kit/animated_text_kit.dart';
+
+import '../providers/getModel_provider.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
@@ -12,37 +17,35 @@ class ChatScreen extends StatefulWidget {
 }
 
 class _ChatScreenState extends State<ChatScreen> {
-  final chats = [
-    {
-      "msg": "Hello, can you tell me about yourself?",
-      "chatIndex": 0,
-    },
-    {
-      "msg":
-          "Hello, I am ChatGPT, a large language model developed by OpenAI. I am here to assist you with any information or questions you may have. How can I help you today?",
-      "chatIndex": 1,
-    },
-    {
-      "msg": "What is stateful widget in flutter?",
-      "chatIndex": 0,
-    },
-    {
-      "msg":
-          "A StatefulWidget is a special type of widget in Flutter that maintains state across multiple builds of the widget. The state is stored in a State object and is accessible through the widget’s build method. This allows the widget to update its state, and thus the UI, whenever the state object changes.",
-      "chatIndex": 1,
-    },
-    {
-      "msg": "Okay thanks",
-      "chatIndex": 0,
-    },
-    {
-      "msg":
-          "You're welcome! Let me know if you have any other questions or if there's anything else I can help you with.",
-      "chatIndex": 1,
-    },
-  ];
+  late TextEditingController textEditingController;
+  @override
+  void initState() {
+    textEditingController = TextEditingController();
+    _chatScroll = ScrollController();
+    focusNode = FocusNode();
+    super.initState();
+  }
+
+  @override
+  void dispose() {
+    textEditingController.dispose();
+    _chatScroll.dispose();
+    focusNode.dispose();
+    super.dispose();
+  }
+
+  List<ChatModel> chats = [];
+  late ScrollController _chatScroll;
+  late FocusNode focusNode;
+  void scrollDown() {
+    _chatScroll.animateTo(_chatScroll.position.maxScrollExtent,
+        duration: const Duration(seconds: 2), curve: Curves.easeInOut);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final modelsProvider = Provider.of<ModelsProvider>(context, listen: false);
+
     return Scaffold(
       backgroundColor: Color.fromRGBO(9, 9, 9, 1),
       appBar: AppBar(
@@ -86,12 +89,13 @@ class _ChatScreenState extends State<ChatScreen> {
         children: [
           Flexible(
             child: ListView.builder(
+              controller: _chatScroll,
               itemCount: chats.length,
               itemBuilder: (context, index) {
                 return Column(
                   children: [
                     Material(
-                      color: chats[index]['chatIndex'] == 0
+                      color: chats[index].chatIndex == 0
                           ? Color.fromRGBO(39, 39, 39, 1)
                           : Color.fromRGBO(3, 104, 37, 1),
                       child: Padding(
@@ -101,11 +105,29 @@ class _ChatScreenState extends State<ChatScreen> {
                             Expanded(
                                 child: Padding(
                               padding: const EdgeInsets.all(8.0),
-                              child: Text(
-                                chats[index]["msg"].toString(),
-                                style: TextStyle(
-                                    fontSize: 16, color: Colors.white),
-                              ),
+                              child: chats[index].chatIndex == 0
+                                  ? Text(
+                                      chats[index].msg.toString(),
+                                      style: TextStyle(
+                                          fontSize: 16, color: Colors.white),
+                                    )
+                                  : DefaultTextStyle(
+                                      style: TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 16),
+                                      child: AnimatedTextKit(
+                                        isRepeatingAnimation: false,
+                                        repeatForever: false,
+                                        displayFullTextOnTap: true,
+                                        totalRepeatCount: 1,
+                                        animatedTexts: [
+                                          TyperAnimatedText(
+                                            chats[index].msg.toString().trim(),
+                                          )
+                                        ],
+                                      ),
+                                    ),
                             ))
                           ],
                         ),
@@ -124,19 +146,22 @@ class _ChatScreenState extends State<ChatScreen> {
                 children: [
                   Expanded(
                       child: TextField(
+                    focusNode: focusNode,
+                    controller: textEditingController,
                     style: TextStyle(color: Colors.white),
-                    onSubmitted: (value) async {},
+                    onSubmitted: (value) async {
+                      await sendMessageToOpenAi(
+                        modelsProvider: modelsProvider,
+                      );
+                    },
                     decoration: InputDecoration.collapsed(
                         hintText: "How can I help you",
                         hintStyle: TextStyle(color: Colors.grey)),
                   )),
                   IconButton(
                       onPressed: () async {
-                        try {
-                          await ApiServices.getModels();
-                        } catch (e) {
-                          print(e);
-                        }
+                        await sendMessageToOpenAi(
+                            modelsProvider: modelsProvider);
                       },
                       icon: const Icon(
                         Icons.send,
@@ -149,5 +174,37 @@ class _ChatScreenState extends State<ChatScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> sendMessageToOpenAi({
+    required ModelsProvider modelsProvider,
+  }) async {
+    if (textEditingController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("You can't send multiple messages"),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+    try {
+      String message = textEditingController.text;
+      setState(() {
+        chats.add(ChatModel(msg: textEditingController.text, chatIndex: 0));
+        textEditingController.clear();
+        focusNode.unfocus();
+      });
+      chats.addAll(await ApiServices.sendMessages(
+          message: message, modelId: modelsProvider.getCurrentModel));
+
+      setState(() {});
+    } catch (e) {
+      print(e.toString());
+    } finally {
+      setState(() {
+        scrollDown();
+      });
+    }
   }
 }
